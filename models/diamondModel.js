@@ -1,0 +1,73 @@
+const mongoose = require("mongoose");
+
+const diamondSchema = new mongoose.Schema(
+  {
+    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    stockId: { type: String, required: true },
+    availability: {
+      type: String,
+      enum: ["AVAILABLE", "SOLD", "PENDING"],
+      default: "AVAILABLE",
+      required: true,
+    },
+    shape: String,
+    carat: { type: Number, required: true },
+    color: String,
+    clarity: String,
+    cut: String,
+    polish: String,
+    symmetry: String,
+    length: Number,
+    width: Number,
+    height: Number,
+    depthPercent: Number,
+    tablePercent: Number,
+    pricePerCarat: Number,
+    price: Number,
+    lab: String,
+    reportNumber: String,
+    inscription: String,
+    certificateComment: String,
+    certificateLink: String,
+    videoLink: String,
+    imageLink: String,
+    fluorescenceIntensity: String,
+    fluorescenceColor: String,
+    girdleThin: String,
+    girdleThick: String,
+    girdlePercent: Number,
+    girdleCondition: String,
+    culetSize: String,
+    culetCondition: String,
+    crownHeight: Number,
+    crownAngle: Number,
+    pavilionDepth: Number,
+    pavilionAngle: Number,
+    shade: String,
+    milky: String,
+    eyeClean: String,
+    treatment: String,
+    keyToSymbols: String,
+    whiteInclusion: String,
+    blackInclusion: String,
+    openInclusion: String,
+    fancyColor: String,
+    fancyColorIntensity: String,
+    fancyColorOvertone: String,
+    location: String,
+    state: String,
+    city: String,
+    type: {
+      type: String,
+      default: "NATURAL",
+      enum: ["NATURAL", "LAB GROWN", "CVD", "HPHT"],
+    },
+    countryOfPolishing: String,
+  },
+  { timestamps: true }
+);
+
+diamondSchema.index({ user: 1, stockId: 1 }, { unique: true });
+diamondSchema.index({ shape: 1, carat: 1, price: 1 });
+
+module.exports = mongoose.model("Diamond", diamondSchema);

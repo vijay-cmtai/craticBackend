@@ -1,0 +1,173 @@
+{
+  "shape": {
+    "rd": "Round",
+    "round": "Round",
+    "round brilliant": "Round",
+    "rbc": "Round",
+    "brc": "Round",
+    "roud": "Round",
+    "rond": "Round",
+    "roundbrilliant": "Round",
+    "pr": "Princess",
+    "princess": "Princess",
+    "princess cut": "Princess",
+    "em": "Emerald",
+    "emerald": "Emerald",
+    "emerald cut": "Emerald",
+    "as": "Asscher",
+    "asscher": "Asscher",
+    "assher": "Asscher",
+    "mq": "Marquise",
+    "marquise": "Marquise",
+    "ov": "Oval",
+    "oval": "Oval",
+    "oval brilliant": "Oval",
+    "rad": "Radiant",
+    "radiant": "Radiant",
+    "radiant cut": "Radiant",
+    "pb": "Pear",
+    "pear": "Pear",
+    "pear brilliant": "Pear",
+    "ht": "Heart",
+    "heart": "Heart",
+    "heart brilliant": "Heart",
+    "cu": "Cushion",
+    "cushion": "Cushion",
+    "cushion brilliant": "Cushion",
+    "cushion modified brilliant": "Cushion Modified",
+    "cmb": "Cushion Modified",
+    "square cushion": "Cushion",
+    "sqcu": "Cushion",
+    "bag": "Baguette",
+    "baguette": "Baguette",
+    "rpomc": "Old Mine Cut",
+    "cut": "Cushion",
+    "cremc": "Emerald"
+  },
+  "cut": {
+    "i": "Ideal",
+    "ideal": "Ideal",
+    "id": "Ideal",
+    "idl": "Ideal",
+    "ex": "Excellent",
+    "excellent": "Excellent",
+    "exlnt": "Excellent",
+    "3ex": "Excellent",
+    "ei": "Excellent",
+    "super ideal": "Excellent",
+    "vg": "Very Good",
+    "very good": "Very Good",
+    "v.good": "Very Good",
+    "gd": "Good",
+    "good": "Good",
+    "fr": "Fair",
+    "fair": "Fair",
+    "fa": "Fair",
+    "po": "Poor",
+    "poor": "Poor"
+  },
+  "polish": {
+    "ex": "Excellent",
+    "excellent": "Excellent",
+    "vg": "Very Good",
+    "very good": "Very Good",
+    "gd": "Good",
+    "good": "Good",
+    "fr": "Fair",
+    "fair": "Fair"
+  },
+  "symmetry": {
+    "ex": "Excellent",
+    "excellent": "Excellent",
+    "vg": "Very Good",
+    "very good": "Very Good",
+    "gd": "Good",
+    "good": "Good",
+    "fr": "Fair",
+    "fair": "Fair"
+  },
+  "clarity": {
+    "if": "IF",
+    "vvs1": "VVS1",
+    "vvs2": "VVS2",
+    "vs1": "VS1",
+    "vs2": "VS2",
+    "si1": "SI1",
+    "si2": "SI2",
+    "i1": "I1",
+    "i2": "I2",
+    "i3": "I3"
+  },
+  "fluorescence intensity": {
+    "none": "None",
+    "non": "None",
+    "no": "None",
+    "fnt": "Faint",
+    "faint": "Faint",
+    "med": "Medium",
+    "medium": "Medium",
+    "stg": "Strong",
+    "strong": "Strong",
+    "str": "Strong",
+    "vstg": "Very Strong",
+    "very strong": "Very Strong",
+    "vst": "Very Strong",
+    "sl": "Slight",
+    "slt": "Slight",
+    "slight": "Slight",
+    "vsl": "Very Slight",
+    "v.slight": "Very Slight",
+    "very slight": "Very Slight"
+  },
+  "type": {
+    "lab grown": "LAB GROWN",
+    "cvd": "CVD",
+    "hpht": "HPHT"
+  },
+  "availability": {
+    "ga": "Available",
+    "onmemo": "On Memo"
+  },
+  "girdle thin": {
+    "medium": "Medium",
+    "thin": "Thin",
+    "slightly thick": "Slightly Thick",
+    "thick": "Thick",
+    "very thick": "Very Thick",
+    "extremely thick": "Extremely Thick",
+    "very thin": "Very Thin"
+  },
+  "girdle thick": {
+    "slightly thick": "Slightly Thick",
+    "very thick": "Very Thick",
+    "medium": "Medium",
+    "extremely thick": "Extremely Thick",
+    "thick": "Thick"
+  },
+  "culet size": {
+    "pointed": "Pointed",
+    "none": "None"
+  },
+  "fancy color": {
+    "yellow": "Yellow",
+    "green": "Green",
+    "pink": "Pink",
+    "blue": "Blue",
+    "black": "Black",
+    "red": "Red"
+  },
+  "fancy color intensity": {
+    "fancy vivid": "Fancy Vivid",
+    "fancy intense": "Fancy Intense",
+    "fancy": "Fancy"
+  },
+  "lab": {
+    "igi": "IGI",
+    "gia": "GIA",
+    "nc": "Non-Certified"
+  },
+  "eye clean": {
+    "yes": "Yes",
+    "no": "No"
+  }
+}
