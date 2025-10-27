@@ -8,18 +8,16 @@ const {
   deleteUser,
   getAllUsers,
   getUserDetailsById,
-  verifyOtp,
-  forgotPassword,
-  resetPassword,
+  // forgotPassword,
+  // resetPassword,
 } = require("../controllers/authController");
 const upload = require("../middleware/uploadMiddleware");
 const { protect, isAdmin } = require("../middleware/authMiddleware");
 
 router.post("/register", upload.single("businessDocument"), register);
-router.post("/verify-otp", verifyOtp);
 router.post("/login", login);
-router.post("/forgot-password", forgotPassword);
-router.post("/reset-password/:token", resetPassword);
+// router.post("/forgot-password", forgotPassword);
+// router.post("/reset-password/:token", resetPassword);
 
 router.get("/me", protect, getMe);
 router.put("/:id", protect, upload.single("businessDocument"), updateUser);
