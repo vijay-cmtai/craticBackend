@@ -1,6 +1,12 @@
+// routes/inventoryRoutes.js
+
 const express = require("express");
 const router = express.Router();
 const { protect, admin } = require("../middleware/authMiddleware.js");
+
+// ✨ 1. Sahi middleware ko import karein
+const upload = require("../middleware/csvUploadMiddleware.js");
+
 const {
   uploadFromCsv,
   addManualDiamond,
@@ -18,16 +24,28 @@ const {
   updateDiamondStatus,
 } = require("../controllers/inventoryController.js");
 
+// --- ROUTES ---
+
 router.route("/").get(getDiamonds);
 router.route("/add-manual").post(protect, addManualDiamond);
-router.route("/upload-csv").post(protect, uploadFromCsv);
+
+// ✨ 2. CSV upload route par middleware lagayein
+// Yeh line 'csvFile' naam ki file ko req.file mein daal degi
+router
+  .route("/upload-csv")
+  .post(protect, upload.single("csvFile"), uploadFromCsv);
+
 router.route("/sync-api").post(protect, syncFromApi);
 router.route("/sync-ftp").post(protect, syncFromFtp);
 
 router.route("/my-inventory").get(protect, getSupplierDiamonds);
 router.route("/:id/status").put(protect, updateDiamondStatus);
 
-router.route("/preview-csv-headers").post(protect, previewCsvHeaders);
+// ✨ 3. CSV preview route par bhi middleware lagana zaroori hai
+router
+  .route("/preview-csv-headers")
+  .post(protect, upload.single("csvFile"), previewCsvHeaders);
+
 router.route("/preview-headers-url").post(protect, previewHeadersFromUrl);
 router.route("/preview-ftp-headers").post(protect, previewFtpHeaders);
 
