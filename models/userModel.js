@@ -48,7 +48,7 @@ const userSchema = new mongoose.Schema(
     businessDocument: { public_id: { type: String }, url: { type: String } },
 
     // --- OTP & PASSWORD RESET ---
-    isVerified: { type: Boolean, default: false },
+    isVerified: { type: Boolean, default: true },
     otp: String,
     otpExpires: Date,
     resetPasswordToken: String,
