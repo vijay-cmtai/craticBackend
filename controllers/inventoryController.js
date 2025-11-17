@@ -1,8 +1,6 @@
-// controllers/inventoryController.js
-
 const asyncHandler = require("express-async-handler");
 const Diamond = require("../models/diamondModel.js");
-const { Readable, Writable } = require("stream"); // ✨ 1. Yahan 'Writable' ko import karein
+const { Readable, Writable } = require("stream");
 const axios = require("axios");
 const ftp = require("basic-ftp");
 const csv = require("csv-parser");
@@ -12,12 +10,14 @@ const {
   convertGoogleSheetsUrl,
 } = require("../services/inventoryService.js");
 
-// ... baaki helper functions waise hi rahenge ...
+// --- HELPER FUNCTIONS ---
+
 const getUserId = (req, sellerId) => {
   if (req.user && req.user.role === "Admin" && sellerId) return sellerId;
   if (req.user && req.user._id) return req.user._id;
   return null;
 };
+
 const getHeaders = (buffer) => {
   return new Promise((resolve, reject) => {
     if (!buffer || buffer.length === 0)
@@ -33,11 +33,20 @@ const getHeaders = (buffer) => {
       .on("data", () => {});
   });
 };
+
+// ✨✨✨ YEH FINAL AUR CORRECTED FUNCTION HAI ✨✨✨
 const createBulkOperations = (results, userIdToAssign) => {
   if (!Array.isArray(results) || results.length === 0) return [];
+
+  // Hum 'GA' jaise available status ko bhi yahan include kar rahe hain
+  const AVAILABLE_STATUSES = ["AVAILABLE", "GA"];
+
   return results.map((d) => {
+    // Ab 'GA' ko bhi available mana jayega
     const isAvailable =
-      !d.availability || String(d.availability).toUpperCase() === "AVAILABLE";
+      !d.availability ||
+      AVAILABLE_STATUSES.includes(String(d.availability).toUpperCase());
+
     if (isAvailable) {
       return {
         updateOne: {
@@ -45,7 +54,7 @@ const createBulkOperations = (results, userIdToAssign) => {
           update: {
             $set: { ...d, user: userIdToAssign, availability: "AVAILABLE" },
           },
-          upsert: true,
+          upsert: true, // Naya diamond add karega agar nahi mila
         },
       };
     } else {
@@ -53,39 +62,41 @@ const createBulkOperations = (results, userIdToAssign) => {
         updateOne: {
           filter: { stockId: d.stockId, user: userIdToAssign },
           update: {
-            $set: { availability: String(d.availability).toUpperCase() },
+            $set: {
+              ...d,
+              user: userIdToAssign,
+              availability: String(d.availability).toUpperCase(),
+            },
           },
-          upsert: false,
+          upsert: true, // Taaki 'Sold' item bhi add ho sake agar naya ho
         },
       };
     }
   });
 };
 
-// ✨ 2. FTP DOWNLOAD FUNCTION KA BUG FIX
-const downloadFtpToBuffer = async (client, path) => {
-  return new Promise((resolve, reject) => {
+const downloadFtpToBuffer = (client, path) => {
+  return new Promise(async (resolve, reject) => {
     const chunks = [];
-    // Hum ek custom Writable stream banayenge jo data ko chunks mein collect karega
     const writable = new Writable({
       write(chunk, encoding, callback) {
         chunks.push(chunk);
         callback();
       },
     });
-
-    writable.on("finish", () => resolve(Buffer.concat(chunks)));
     writable.on("error", reject);
-
-    // Ab 'downloadTo' is writable stream par aaram se likh payega
-    client.downloadTo(writable, path);
+    try {
+      await client.downloadTo(writable, path);
+      resolve(Buffer.concat(chunks));
+    } catch (err) {
+      reject(err);
+    }
   });
 };
 
 // --- CONTROLLERS ---
 
 const addManualDiamond = asyncHandler(async (req, res) => {
-  // Yeh pehle se theek hai
   const { stockId, carat, sellerId } = req.body;
   if (!stockId || !carat)
     return res
@@ -128,7 +139,6 @@ const uploadFromCsv = asyncHandler(async (req, res) => {
         .status(400)
         .json({ success: false, message: "User identification failed." });
 
-    // CSV ke liye JSON.parse zaroori hai kyunki FormData se data string mein aata hai
     const userMapping = JSON.parse(mapping);
     const readableStream = Readable.from(req.file.buffer);
     const results = await processCsvStreamWithMapping(
@@ -137,31 +147,25 @@ const uploadFromCsv = asyncHandler(async (req, res) => {
     );
     const operations = createBulkOperations(results, userIdToAssign);
     if (operations.length === 0)
-      return res
-        .status(200)
-        .json({
-          success: true,
-          message: "CSV processed, but no valid data found.",
-          newDiamondsAdded: 0,
-          diamondsUpdated: 0,
-        });
+      return res.status(200).json({
+        success: true,
+        message: "CSV processed, but no valid data found.",
+        newDiamondsAdded: 0,
+        diamondsUpdated: 0,
+      });
     const bulkResult = await Diamond.bulkWrite(operations, { ordered: false });
     if (req.app.get("socketio"))
-      req.app
-        .get("socketio")
-        .emit("inventory-updated", {
-          message: "Inventory updated via CSV Upload!",
-          newDiamondsAdded: bulkResult.upsertedCount,
-          diamondsUpdated: bulkResult.modifiedCount,
-        });
-    res
-      .status(200)
-      .json({
-        success: true,
-        message: "CSV processed successfully.",
+      req.app.get("socketio").emit("inventory-updated", {
+        message: "Inventory updated via CSV Upload!",
         newDiamondsAdded: bulkResult.upsertedCount,
         diamondsUpdated: bulkResult.modifiedCount,
       });
+    res.status(200).json({
+      success: true,
+      message: "CSV processed successfully.",
+      newDiamondsAdded: bulkResult.upsertedCount,
+      diamondsUpdated: bulkResult.modifiedCount,
+    });
   } catch (error) {
     console.error("CSV Upload Error:", error);
     res
@@ -186,9 +190,7 @@ const syncFromApi = asyncHandler(async (req, res) => {
         .status(400)
         .json({ success: false, message: "User identification failed." });
 
-    // ✨ 3. API SYNC BUG FIX: Yahan JSON.parse() ki zaroorat nahi hai
-    const userMapping = mapping; // 'mapping' pehle se hi ek object hai
-
+    const userMapping = mapping;
     const result = await syncInventoryFromApi(
       apiUrl,
       userMapping,
@@ -214,69 +216,71 @@ const syncFromApi = asyncHandler(async (req, res) => {
 });
 
 const syncFromFtp = asyncHandler(async (req, res) => {
+  const { host, user, password, path, mapping, sellerId } = req.body;
+  if (!host || !path || !mapping)
+    return res
+      .status(400)
+      .json({
+        success: false,
+        message: "Host, Path and Mapping are required.",
+      });
+
+  const userIdToAssign = getUserId(req, sellerId);
+  if (!userIdToAssign)
+    return res
+      .status(400)
+      .json({ success: false, message: "User identification failed." });
+
+  const userMapping = mapping;
+  const client = new ftp.Client();
   try {
-    const { host, user, password, path, mapping, sellerId } = req.body;
-    if (!host || !path || !mapping)
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Host, Path and Mapping are required.",
-        });
-    const userIdToAssign = getUserId(req, sellerId);
-    if (!userIdToAssign)
-      return res
-        .status(400)
-        .json({ success: false, message: "User identification failed." });
-
-    // ✨ 4. FTP SYNC BUG FIX: Yahan bhi JSON.parse() ki zaroorat nahi hai
-    const userMapping = mapping; // 'mapping' pehle se hi ek object hai
-
-    const client = new ftp.Client();
     await client.access({ host, user, password, secure: false });
-    const buffer = await downloadFtpToBuffer(client, path); // Yeh ab naye function se kaam karega
-    client.close();
+    const buffer = await downloadFtpToBuffer(client, path);
+
     const readableStream = Readable.from(buffer);
     const results = await processCsvStreamWithMapping(
       readableStream,
       userMapping
     );
     const operations = createBulkOperations(results, userIdToAssign);
-    if (operations.length === 0)
-      return res
-        .status(200)
-        .json({
-          success: true,
-          message: "FTP file processed, but no valid data found.",
-          newDiamondsAdded: 0,
-          diamondsUpdated: 0,
-        });
-    const bulkResult = await Diamond.bulkWrite(operations, { ordered: false });
-    if (req.app.get("socketio"))
-      req.app
-        .get("socketio")
-        .emit("inventory-updated", {
-          message: "Inventory updated via FTP Sync!",
-          newDiamondsAdded: bulkResult.upsertedCount,
-          diamondsUpdated: bulkResult.modifiedCount,
-        });
-    res
-      .status(200)
-      .json({
+
+    if (operations.length === 0) {
+      return res.status(200).json({
         success: true,
-        message: "FTP Sync successful.",
+        message: "FTP file processed, but no valid data found.",
+        newDiamondsAdded: 0,
+        diamondsUpdated: 0,
+      });
+    }
+
+    const bulkResult = await Diamond.bulkWrite(operations, { ordered: false });
+
+    if (req.app.get("socketio")) {
+      req.app.get("socketio").emit("inventory-updated", {
+        message: "Inventory updated via FTP Sync!",
         newDiamondsAdded: bulkResult.upsertedCount,
         diamondsUpdated: bulkResult.modifiedCount,
       });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "FTP Sync successful.",
+      newDiamondsAdded: bulkResult.upsertedCount,
+      diamondsUpdated: bulkResult.modifiedCount,
+    });
   } catch (error) {
     console.error("FTP Sync Error:", error);
     res
       .status(500)
       .json({ success: false, message: `FTP failed: ${error.message}` });
+  } finally {
+    if (!client.closed) {
+      client.close();
+    }
   }
 });
 
-// Baaki sabhi functions waise hi rahenge, woh pehle se theek hain
 const previewCsvHeaders = asyncHandler(async (req, res) => {
   try {
     if (!req.file)
@@ -294,6 +298,7 @@ const previewCsvHeaders = asyncHandler(async (req, res) => {
       });
   }
 });
+
 const previewHeadersFromUrl = asyncHandler(async (req, res) => {
   try {
     const { apiUrl } = req.body;
@@ -325,25 +330,35 @@ const previewHeadersFromUrl = asyncHandler(async (req, res) => {
       });
   }
 });
+
 const previewFtpHeaders = asyncHandler(async (req, res) => {
   const { host, user, password, path } = req.body;
   if (!host || !path)
     return res
       .status(400)
       .json({ success: false, message: "Host and Path are required." });
+
   const client = new ftp.Client();
   try {
     await client.access({ host, user, password, secure: false });
     const buffer = await downloadFtpToBuffer(client, path);
-    client.close();
     const headers = await getHeaders(buffer);
     res.status(200).json({ success: true, headers });
   } catch (error) {
+    console.error(
+      `FTP Header Preview Failed for path: "${path}". Error:`,
+      error
+    );
     res
       .status(500)
       .json({ success: false, message: `FTP error: ${error.message}` });
+  } finally {
+    if (!client.closed) {
+      client.close();
+    }
   }
 });
+
 const getDiamonds = asyncHandler(async (req, res) => {
   const pageSize = 10;
   const page = Number(req.query.page) || 1;
@@ -369,16 +384,19 @@ const getDiamonds = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 });
   res.json({ diamonds, page, pages: Math.ceil(count / pageSize), count });
 });
+
 const getDiamondById = asyncHandler(async (req, res) => {
   const diamond = await Diamond.findById(req.params.id);
   if (!diamond) return res.status(404).json({ message: "Diamond not found" });
   res.json(diamond);
 });
+
 const getDiamondByStockId = asyncHandler(async (req, res) => {
   const diamond = await Diamond.findOne({ stockId: req.params.stockId });
   if (!diamond) return res.status(404).json({ message: "Diamond not found" });
   res.json(diamond);
 });
+
 const updateDiamond = asyncHandler(async (req, res) => {
   const diamond = await Diamond.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
@@ -387,17 +405,20 @@ const updateDiamond = asyncHandler(async (req, res) => {
   if (!diamond) return res.status(404).json({ message: "Diamond not found" });
   res.json(diamond);
 });
+
 const deleteDiamond = asyncHandler(async (req, res) => {
   const diamond = await Diamond.findByIdAndDelete(req.params.id);
   if (!diamond) return res.status(404).json({ message: "Diamond not found" });
   res.json({ message: "Diamond removed" });
 });
+
 const getSupplierDiamonds = asyncHandler(async (req, res) => {
   const diamonds = await Diamond.find({ user: req.user._id }).sort({
     createdAt: -1,
   });
   res.status(200).json({ success: true, diamonds });
 });
+
 const updateDiamondStatus = asyncHandler(async (req, res) => {
   const { availability } = req.body;
   const diamondId = req.params.id;
