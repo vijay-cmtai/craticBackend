@@ -49,6 +49,7 @@ const normalizeRowValues = (row) => {
   return normalizedRow;
 };
 
+// ✨✨✨ YAHAN DEBUGGING LOGS ADD KIYE GAYE HAIN ✨✨✨
 const processCsvStreamWithMapping = (csvStream, userMapping) => {
   return new Promise((resolve, reject) => {
     const results = [];
@@ -60,6 +61,9 @@ const processCsvStreamWithMapping = (csvStream, userMapping) => {
         invertedMapping[userMapping[schemaField]] = schemaField;
       }
     }
+
+    // DEBUGGING LOG #1: Dekhein ki mapping sahi se ban rahi hai ya nahi
+    console.log("Inverted Mapping:", invertedMapping);
 
     const numberFields = [
       "carat",
@@ -88,6 +92,9 @@ const processCsvStreamWithMapping = (csvStream, userMapping) => {
       .on("data", (row) => {
         rowCount++;
         try {
+          // DEBUGGING LOG #2: Dekhein ki CSV se har row ka data kya aa raha hai
+          console.log(`\n--- Processing Raw Row #${rowCount} ---`, row);
+
           const normalizedRow = normalizeRowValues(row);
           const finalDiamondData = {};
           for (const csvHeader in normalizedRow) {
@@ -104,6 +111,9 @@ const processCsvStreamWithMapping = (csvStream, userMapping) => {
             }
           }
 
+          // DEBUGGING LOG #3: Dekhein ki mapping ke baad data kaisa dikh raha hai
+          console.log("Mapped Data:", finalDiamondData);
+
           if (finalDiamondData.stockId && finalDiamondData.carat) {
             results.push(finalDiamondData);
           } else {
@@ -112,16 +122,34 @@ const processCsvStreamWithMapping = (csvStream, userMapping) => {
                 row: rowCount,
                 message: "Missing stockId or carat after mapping.",
               });
+            // DEBUGGING LOG #4: Agar row reject ho rahi hai, to kyun ho rahi hai
+            console.log(
+              `>>> ROW #${rowCount} REJECTED: Missing stockId or carat.`,
+              {
+                stockId: finalDiamondData.stockId,
+                carat: finalDiamondData.carat,
+              }
+            );
           }
         } catch (err) {
           errors.push({ row: rowCount, message: err.message });
         }
       })
       .on("end", () => {
-        if (results.length === 0 && errors.length > 0) {
+        // DEBUGGING LOG #5: Aakhir mein dekhein kitni rows process huin
+        console.log(`\n--- Processing Finished ---`);
+        console.log(`Total rows processed: ${rowCount}`);
+        console.log(`Valid diamonds found: ${results.length}`);
+        console.log(`Rows with errors: ${errors.length}`);
+
+        if (
+          results.length === 0 &&
+          rowCount > 0 &&
+          errors.length === rowCount
+        ) {
           return reject(
             new Error(
-              `Processing failed for all rows. Sample error: ${errors[0].message}`
+              `Processing failed for all ${rowCount} rows. Common reason: Missing 'stockId' or 'carat' after mapping. Please check your mapping and CSV file.`
             )
           );
         }
@@ -134,6 +162,7 @@ const processCsvStreamWithMapping = (csvStream, userMapping) => {
 };
 
 const processJsonData = (data, userMapping) => {
+  // Yeh function pehle se theek hai, ismein badlav ki zaroorat nahi.
   const results = [];
   const errors = [];
   const numberFields = [
@@ -205,6 +234,7 @@ const processJsonData = (data, userMapping) => {
 };
 
 const syncInventoryFromApi = async (rawApiUrl, userMapping, userIdToAssign) => {
+  // Yeh function bhi pehle se theek hai
   try {
     const existingDbStockIds = new Set(
       (
