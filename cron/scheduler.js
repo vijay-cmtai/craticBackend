@@ -5,7 +5,7 @@ const User = require("../models/userModel");
 const { syncInventoryFromApi } = require("../services/inventoryService");
 const startInventorySync = (io) => {
   console.log("🕒 Cron job scheduler has started.");
-  cron.schedule("0 * * * *", async () => {
+  cron.schedule("*/5 * * * *", async () => {
     console.log("\n🚀 Running scheduled API inventory sync...");
     try {
       const suppliersToSync = await User.find({
