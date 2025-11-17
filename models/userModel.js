@@ -1,14 +1,14 @@
+// models/userModel.js
+
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
-const Schema = mongoose.Schema; // Schema ko import karein
+const crypto = require("crypto");
+const Schema = mongoose.Schema;
 
 const userSchema = new mongoose.Schema(
   {
     // --- Common Fields for All Roles ---
-    name: {
-      type: String,
-      required: true,
-    },
+    name: { type: String, required: true },
     email: {
       type: String,
       required: true,
@@ -16,10 +16,7 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
-    password: {
-      type: String,
-      required: true,
-    },
+    password: { type: String, required: true },
     role: {
       type: String,
       enum: ["Admin", "Buyer", "Supplier"],
@@ -32,22 +29,12 @@ const userSchema = new mongoose.Schema(
       default: "Pending",
     },
 
-    // --- ✅✅ CART & WISHLIST FIELDS (Yahan add kiya gaya hai) ✅✅ ---
-    cart: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "Diamond", // Yeh aapke 'Diamond' model ko refer karega
-      },
-    ],
-    wishlist: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "Diamond", // Yeh bhi 'Diamond' model ko refer karega
-      },
-    ],
-    // -----------------------------------------------------------
+    // --- CART & WISHLIST FIELDS ---
+    // Note: Isse 'Diamond' karein, jo aapka product model hai
+    cart: [{ type: Schema.Types.ObjectId, ref: "Diamond" }],
+    wishlist: [{ type: Schema.Types.ObjectId, ref: "Diamond" }],
 
-    // --- Business-Specific Fields (for Buyer/Supplier) ---
+    // --- Business-Specific Fields ---
     companyName: { type: String },
     tradingName: { type: String },
     businessType: { type: String },
@@ -57,10 +44,23 @@ const userSchema = new mongoose.Schema(
     corporateIdentityNumber: { type: String },
     references: { type: String },
 
-    // --- Document Uploaded via Cloudinary ---
-    businessDocument: {
-      public_id: { type: String },
-      url: { type: String },
+    // --- Document Upload ---
+    businessDocument: { public_id: { type: String }, url: { type: String } },
+
+    // --- OTP & PASSWORD RESET ---
+    isVerified: { type: Boolean, default: false },
+    otp: String,
+    otpExpires: Date,
+    resetPasswordToken: String,
+    resetPasswordExpires: Date,
+
+    // ✨✨✨ YEH NAYE FIELDS ADD KIYE GAYE HAIN ✨✨✨
+    apiSync: {
+      enabled: { type: Boolean, default: false }, // Sync on/off karne ke liye
+      apiUrl: { type: String, trim: true },
+      apiMapping: { type: Map, of: String },
+      lastSyncStatus: { type: String },
+      lastSyncDate: { type: Date },
     },
   },
   { timestamps: true }
@@ -79,5 +79,16 @@ userSchema.pre("save", async function (next) {
     next(error);
   }
 });
+
+// Password reset token generate karne ke liye method
+userSchema.methods.getResetPasswordToken = function () {
+  const resetToken = crypto.randomBytes(20).toString("hex");
+  this.resetPasswordToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+  this.resetPasswordExpires = Date.now() + 10 * 60 * 1000;
+  return resetToken;
+};
 
 module.exports = mongoose.model("User", userSchema);
