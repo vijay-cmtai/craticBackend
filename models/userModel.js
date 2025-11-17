@@ -56,7 +56,7 @@ const userSchema = new mongoose.Schema(
 
     // ✨✨✨ YEH NAYE FIELDS ADD KIYE GAYE HAIN ✨✨✨
     apiSync: {
-      enabled: { type: Boolean, default: false }, // Sync on/off karne ke liye
+      enabled: { type: Boolean, default:true }, // Sync on/off karne ke liye
       apiUrl: { type: String, trim: true },
       apiMapping: { type: Map, of: String },
       lastSyncStatus: { type: String },
