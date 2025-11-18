@@ -28,7 +28,6 @@ const userSchema = new mongoose.Schema(
       required: true,
       default: "Pending",
     },
-
     // --- CART & WISHLIST FIELDS ---
     // Note: Isse 'Diamond' karein, jo aapka product model hai
     cart: [{ type: Schema.Types.ObjectId, ref: "Diamond" }],
