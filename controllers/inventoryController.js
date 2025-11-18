@@ -1,6 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const Diamond = require("../models/diamondModel.js");
-const User = require("../models/userModel.js"); // User model import karein
+const User = require("../models/userModel.js");
 const { Readable, Writable } = require("stream");
 const axios = require("axios");
 const ftp = require("basic-ftp");
@@ -10,8 +10,6 @@ const {
   processCsvStreamWithMapping,
   convertGoogleSheetsUrl,
 } = require("../services/inventoryService.js");
-
-// --- HELPER FUNCTIONS ---
 
 const getUserId = (req, sellerId) => {
   if (req.user && req.user.role === "Admin" && sellerId) return sellerId;
@@ -76,8 +74,6 @@ const downloadFtpToBuffer = (client, path) => {
   });
 };
 
-// --- CONTROLLERS ---
-
 const addManualDiamond = asyncHandler(async (req, res) => {
   const { stockId, carat, sellerId } = req.body;
   if (!stockId || !carat)
@@ -94,13 +90,10 @@ const addManualDiamond = asyncHandler(async (req, res) => {
     user: userIdToAssign,
   });
   if (diamondExists)
-    return res
-      .status(409)
-      .json({
-        success: false,
-        message:
-          "A diamond with this Stock ID already exists for this supplier.",
-      });
+    return res.status(409).json({
+      success: false,
+      message: "A diamond with this Stock ID already exists for this supplier.",
+    });
   const diamond = await Diamond.create({ ...req.body, user: userIdToAssign });
   res.status(201).json({ success: true, data: diamond });
 });
@@ -170,18 +163,14 @@ const uploadFromCsv = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error("CSV Sync Error:", error);
     if (error.code === 11000)
-      return res
-        .status(409)
-        .json({
-          success: false,
-          message: `CSV Sync failed: Duplicate Stock ID found. ${error.message}`,
-        });
-    res
-      .status(500)
-      .json({
+      return res.status(409).json({
         success: false,
-        message: `CSV processing failed: ${error.message}`,
+        message: `CSV Sync failed: Duplicate Stock ID found. ${error.message}`,
       });
+    res.status(500).json({
+      success: false,
+      message: `CSV processing failed: ${error.message}`,
+    });
   }
 });
 
@@ -210,32 +199,24 @@ const syncFromApi = asyncHandler(async (req, res) => {
         user.apiSync.apiUrl = apiUrl;
         user.apiSync.apiMapping = mapping;
         user.apiSync.enabled = enableAutoSync === true;
-
         await user.save();
-        console.log(
-          `-> API Sync settings ${enableAutoSync ? "enabled and saved" : "saved (disabled)"} for user: ${user.name}`
-        );
       }
 
       if (req.app.get("socketio")) {
-        req.app
-          .get("socketio")
-          .emit("inventory-updated", {
-            message: "Inventory updated via API Sync!",
-            ...result,
-          });
+        req.app.get("socketio").emit("inventory-updated", {
+          message: "Inventory updated via API Sync!",
+          ...result,
+        });
       }
     }
 
     res.status(result.success ? 200 : 400).json(result);
   } catch (error) {
     console.error("API Sync FATAL Error:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: `API sync failed unexpectedly: ${error.message}`,
-      });
+    res.status(500).json({
+      success: false,
+      message: `API sync failed unexpectedly: ${error.message}`,
+    });
   }
 });
 
@@ -247,12 +228,10 @@ const syncFromFtp = asyncHandler(async (req, res) => {
       .status(400)
       .json({ success: false, message: "User identification failed." });
   if (!host || !path || !mapping)
-    return res
-      .status(400)
-      .json({
-        success: false,
-        message: "Host, Path and Mapping are required.",
-      });
+    return res.status(400).json({
+      success: false,
+      message: "Host, Path and Mapping are required.",
+    });
 
   const client = new ftp.Client();
   try {
@@ -303,12 +282,10 @@ const syncFromFtp = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error("FTP Sync Error:", error);
     if (error.code === 11000)
-      return res
-        .status(409)
-        .json({
-          success: false,
-          message: `FTP Sync failed: Duplicate Stock ID found. ${error.message}`,
-        });
+      return res.status(409).json({
+        success: false,
+        message: `FTP Sync failed: Duplicate Stock ID found. ${error.message}`,
+      });
     res
       .status(500)
       .json({ success: false, message: `FTP failed: ${error.message}` });
@@ -326,12 +303,10 @@ const previewCsvHeaders = asyncHandler(async (req, res) => {
     const headers = await getHeaders(req.file.buffer);
     res.status(200).json({ success: true, headers });
   } catch (error) {
-    res
-      .status(400)
-      .json({
-        success: false,
-        message: `Could not read headers: ${error.message}`,
-      });
+    res.status(400).json({
+      success: false,
+      message: `Could not read headers: ${error.message}`,
+    });
   }
 });
 
@@ -358,12 +333,10 @@ const previewHeadersFromUrl = asyncHandler(async (req, res) => {
       throw new Error("Could not extract any headers from the URL.");
     res.status(200).json({ success: true, headers });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: `Failed to get headers from URL: ${error.message}`,
-      });
+    res.status(500).json({
+      success: false,
+      message: `Failed to get headers from URL: ${error.message}`,
+    });
   }
 });
 
@@ -381,10 +354,6 @@ const previewFtpHeaders = asyncHandler(async (req, res) => {
     const headers = await getHeaders(buffer);
     res.status(200).json({ success: true, headers });
   } catch (error) {
-    console.error(
-      `FTP Header Preview Failed for path: "${path}". Error:`,
-      error
-    );
     res
       .status(500)
       .json({ success: false, message: `FTP error: ${error.message}` });
@@ -406,18 +375,24 @@ const getDiamonds = asyncHandler(async (req, res) => {
         ],
       }
     : {};
+
   const filter = { ...searchTerm };
+
   if (req.user) {
-    if (req.user.role === "Admin" && req.query.sellerId)
+    if (req.user.role === "Admin" && req.query.sellerId) {
       filter.user = req.query.sellerId;
-    else if (req.user.role !== "Admin") filter.user = req.user._id;
+    } else if (req.user.role !== "Admin") {
+      filter.user = req.user._id;
+    }
   }
+
   const count = await Diamond.countDocuments(filter);
   const diamonds = await Diamond.find(filter)
     .populate("user", "name")
     .limit(pageSize)
     .skip(pageSize * (page - 1))
     .sort({ createdAt: -1 });
+
   res.json({ diamonds, page, pages: Math.ceil(count / pageSize), count });
 });
 
