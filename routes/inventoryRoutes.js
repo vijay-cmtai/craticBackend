@@ -2,7 +2,11 @@
 
 const express = require("express");
 const router = express.Router();
-const { protect, admin } = require("../middleware/authMiddleware.js");
+const {
+  protect,
+  isAdmin,
+  optionalProtect,
+} = require("../middleware/authMiddleware.js");
 
 // ✨ 1. Sahi middleware ko import karein
 const upload = require("../middleware/csvUploadMiddleware.js");
@@ -25,8 +29,7 @@ const {
 } = require("../controllers/inventoryController.js");
 
 // --- ROUTES ---
-
-router.route("/").get(getDiamonds);
+router.route("/").get(optionalProtect, getDiamonds);
 router.route("/add-manual").post(protect, addManualDiamond);
 
 // ✨ 2. CSV upload route par middleware lagayein
