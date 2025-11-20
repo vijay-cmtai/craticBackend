@@ -1,7 +1,8 @@
 const axios = require("axios");
 const Diamond = require("../models/diamondModel.js");
 const csv = require("csv-parser");
-const { Readable } = require("stream");
+const { Readable, Writable } = require("stream");
+const ftp = require("basic-ftp");
 const valueMapping = require("../config/valueMapping.json");
 
 const safeParseFloat = (value) => {
@@ -27,61 +28,44 @@ const normalizeRowValues = (row) => {
   for (const header in normalizedRow) {
     const lowerCaseHeader = header.toLowerCase();
     let value = normalizedRow[header];
-
     if (
       value === null ||
       typeof value === "undefined" ||
       value.toString().trim() === "" ||
       value.toString().trim() === "*"
-    ) {
+    )
       continue;
-    }
-
     value = value.toString().trim();
     const headerValueMapping = valueMapping[lowerCaseHeader];
     if (headerValueMapping) {
       const normalizedValue = headerValueMapping[value.toLowerCase()];
-      if (normalizedValue !== undefined) {
+      if (normalizedValue !== undefined)
         normalizedRow[header] = normalizedValue;
-      }
     }
   }
   return normalizedRow;
 };
 
-// ✨✨✨ YAHAN DEBUGGING LOGS ADD KIYE GAYE HAIN ✨✨✨
 const processCsvStreamWithMapping = (csvStream, userMapping) => {
   return new Promise((resolve, reject) => {
     const results = [];
     const errors = [];
     const invertedMapping = {};
-
     for (const schemaField in userMapping) {
       if (userMapping[schemaField] && userMapping[schemaField] !== "none") {
         invertedMapping[userMapping[schemaField]] = schemaField;
       }
     }
-
-    // DEBUGGING LOG #1: Dekhein ki mapping sahi se ban rahi hai ya nahi
-    console.log("Inverted Mapping:", invertedMapping);
-
     const numberFields = [
       "carat",
       "length",
       "width",
       "height",
-      "pricePerCarat",
       "price",
-      "depthPercent",
-      "tablePercent",
-      "girdlePercent",
-      "crownHeight",
-      "crownAngle",
-      "pavilionDepth",
-      "pavilionAngle",
+      "depth",
+      "table",
     ];
     let rowCount = 0;
-
     csvStream
       .pipe(
         csv({
@@ -92,9 +76,6 @@ const processCsvStreamWithMapping = (csvStream, userMapping) => {
       .on("data", (row) => {
         rowCount++;
         try {
-          // DEBUGGING LOG #2: Dekhein ki CSV se har row ka data kya aa raha hai
-          console.log(`\n--- Processing Raw Row #${rowCount} ---`, row);
-
           const normalizedRow = normalizeRowValues(row);
           const finalDiamondData = {};
           for (const csvHeader in normalizedRow) {
@@ -110,10 +91,6 @@ const processCsvStreamWithMapping = (csvStream, userMapping) => {
               }
             }
           }
-
-          // DEBUGGING LOG #3: Dekhein ki mapping ke baad data kaisa dikh raha hai
-          console.log("Mapped Data:", finalDiamondData);
-
           if (finalDiamondData.stockId && finalDiamondData.carat) {
             results.push(finalDiamondData);
           } else {
@@ -122,26 +99,12 @@ const processCsvStreamWithMapping = (csvStream, userMapping) => {
                 row: rowCount,
                 message: "Missing stockId or carat after mapping.",
               });
-            // DEBUGGING LOG #4: Agar row reject ho rahi hai, to kyun ho rahi hai
-            console.log(
-              `>>> ROW #${rowCount} REJECTED: Missing stockId or carat.`,
-              {
-                stockId: finalDiamondData.stockId,
-                carat: finalDiamondData.carat,
-              }
-            );
           }
         } catch (err) {
           errors.push({ row: rowCount, message: err.message });
         }
       })
       .on("end", () => {
-        // DEBUGGING LOG #5: Aakhir mein dekhein kitni rows process huin
-        console.log(`\n--- Processing Finished ---`);
-        console.log(`Total rows processed: ${rowCount}`);
-        console.log(`Valid diamonds found: ${results.length}`);
-        console.log(`Rows with errors: ${errors.length}`);
-
         if (
           results.length === 0 &&
           rowCount > 0 &&
@@ -149,20 +112,19 @@ const processCsvStreamWithMapping = (csvStream, userMapping) => {
         ) {
           return reject(
             new Error(
-              `Processing failed for all ${rowCount} rows. Common reason: Missing 'stockId' or 'carat' after mapping. Please check your mapping and CSV file.`
+              `Processing failed for all ${rowCount} rows. Please check mapping and CSV file.`
             )
           );
         }
         resolve(results);
       })
-      .on("error", (err) => {
-        reject(new Error(`CSV stream failed: ${err.message}`));
-      });
+      .on("error", (err) =>
+        reject(new Error(`CSV stream failed: ${err.message}`))
+      );
   });
 };
 
 const processJsonData = (data, userMapping) => {
-  // Yeh function pehle se theek hai, ismein badlav ki zaroorat nahi.
   const results = [];
   const errors = [];
   const numberFields = [
@@ -170,17 +132,10 @@ const processJsonData = (data, userMapping) => {
     "length",
     "width",
     "height",
-    "pricePerCarat",
     "price",
-    "depthPercent",
-    "tablePercent",
-    "girdlePercent",
-    "crownHeight",
-    "crownAngle",
-    "pavilionDepth",
-    "pavilionAngle",
+    "depth",
+    "table",
   ];
-
   let diamondsArray = data;
   if (data.data && Array.isArray(data.data)) diamondsArray = data.data;
   else if (data.diamonds && Array.isArray(data.diamonds))
@@ -189,10 +144,8 @@ const processJsonData = (data, userMapping) => {
     diamondsArray = data.result;
   else if (data.results && Array.isArray(data.results))
     diamondsArray = data.results;
-  else if (!Array.isArray(data)) {
+  else if (!Array.isArray(data))
     throw new Error("Could not find an array of diamonds in the API response.");
-  }
-
   diamondsArray.forEach((item, index) => {
     try {
       const normalizedItem = normalizeRowValues(item);
@@ -210,7 +163,6 @@ const processJsonData = (data, userMapping) => {
           }
         }
       }
-
       if (finalDiamondData.stockId && finalDiamondData.carat) {
         results.push(finalDiamondData);
       } else {
@@ -224,49 +176,89 @@ const processJsonData = (data, userMapping) => {
       errors.push({ row: index + 1, message: err.message });
     }
   });
-
-  if (results.length === 0 && errors.length > 0) {
+  if (results.length === 0 && errors.length > 0)
     throw new Error(
       `Processing failed for all JSON rows. Sample error: ${errors[0].message}`
     );
-  }
   return results;
 };
 
-const syncInventoryFromApi = async (rawApiUrl, userMapping, userIdToAssign) => {
-  // Yeh function bhi pehle se theek hai
-  try {
-    const existingDbStockIds = new Set(
-      (
-        await Diamond.find(
-          { user: userIdToAssign, availability: "AVAILABLE" },
-          "stockId"
-        ).lean()
-      ).map((d) => d.stockId)
+const performDatabaseSync = async (diamondsToProcess, userIdToAssign) => {
+  const existingDbStockIds = new Set(
+    (
+      await Diamond.find(
+        { user: userIdToAssign, availability: { $ne: "SOLD" } },
+        "stockId"
+      ).lean()
+    ).map((d) => d.stockId)
+  );
+  const newFileStockIds = new Set(diamondsToProcess.map((d) => d.stockId));
+  const operations = diamondsToProcess.map((d) => {
+    const AVAILABLE_STATUSES = ["AVAILABLE", "GA"];
+    const isAvailable =
+      !d.availability ||
+      AVAILABLE_STATUSES.includes(String(d.availability).toUpperCase());
+    const finalAvailability = isAvailable
+      ? "AVAILABLE"
+      : String(d.availability).toUpperCase();
+    return {
+      updateOne: {
+        filter: { stockId: d.stockId, user: userIdToAssign },
+        update: {
+          $set: { ...d, user: userIdToAssign, availability: finalAvailability },
+        },
+        upsert: true,
+      },
+    };
+  });
+  let bulkResult = { upsertedCount: 0, modifiedCount: 0 };
+  if (operations.length > 0) {
+    bulkResult = await Diamond.bulkWrite(operations, { ordered: false });
+  }
+  const stockIdsToRemove = [...existingDbStockIds].filter(
+    (id) => !newFileStockIds.has(id)
+  );
+  let archivedCount = 0;
+  if (stockIdsToRemove.length > 0) {
+    const { modifiedCount } = await Diamond.updateMany(
+      {
+        user: userIdToAssign,
+        stockId: { $in: stockIdsToRemove },
+      },
+      { $set: { availability: "ARCHIVED" } }
     );
+    archivedCount = modifiedCount;
+  }
+  return {
+    newDiamondsAdded: bulkResult.upsertedCount,
+    diamondsUpdated: bulkResult.modifiedCount,
+    diamondsArchived: archivedCount,
+  };
+};
 
+const syncInventoryFromApi = async (rawApiUrl, userMapping, userIdToAssign) => {
+  try {
     const apiUrl = convertGoogleSheetsUrl(rawApiUrl);
     const response = await axios.get(apiUrl, {
       responseType: "text",
       timeout: 300000,
     });
-
     if (response.status !== 200)
       throw new Error(`API returned status ${response.status}`);
     if (!response.data || response.data.length === 0) {
-      const { deletedCount } = await Diamond.deleteMany({
-        user: userIdToAssign,
-        availability: "AVAILABLE",
-      });
+      const { modifiedCount } = await Diamond.updateMany(
+        {
+          user: userIdToAssign,
+          availability: "AVAILABLE",
+        },
+        { $set: { availability: "ARCHIVED" } }
+      );
       return {
         success: true,
-        message: "Feed was empty. Removed all available listings.",
-        newDiamondsAdded: 0,
-        diamondsUpdated: 0,
-        diamondsRemoved: deletedCount,
+        message: "Feed was empty. Archived all available listings.",
+        diamondsArchived: modifiedCount,
       };
     }
-
     let diamondsToProcess = [];
     try {
       const jsonData = JSON.parse(response.data);
@@ -278,53 +270,14 @@ const syncInventoryFromApi = async (rawApiUrl, userMapping, userIdToAssign) => {
         userMapping
       );
     }
-
-    const apiStockIds = new Set(diamondsToProcess.map((d) => d.stockId));
-
-    const operations = diamondsToProcess.map((d) => {
-      const isAvailable = !d.availability || d.availability === "AVAILABLE";
-      if (isAvailable) {
-        return {
-          updateOne: {
-            filter: { stockId: d.stockId, user: userIdToAssign },
-            update: {
-              $set: { ...d, user: userIdToAssign, availability: "AVAILABLE" },
-            },
-            upsert: true,
-          },
-        };
-      } else {
-        return {
-          updateOne: {
-            filter: { stockId: d.stockId, user: userIdToAssign },
-            update: { $set: { availability: "SOLD" } },
-            upsert: false,
-          },
-        };
-      }
-    });
-
-    const bulkResult = await Diamond.bulkWrite(operations, { ordered: false });
-
-    const stockIdsToRemove = [...existingDbStockIds].filter(
-      (id) => !apiStockIds.has(id)
+    const syncResult = await performDatabaseSync(
+      diamondsToProcess,
+      userIdToAssign
     );
-    let removedCount = 0;
-    if (stockIdsToRemove.length > 0) {
-      const { deletedCount } = await Diamond.deleteMany({
-        user: userIdToAssign,
-        stockId: { $in: stockIdsToRemove },
-      });
-      removedCount = deletedCount;
-    }
-
     return {
       success: true,
       message: "API sync completed successfully.",
-      totalInFeed: diamondsToProcess.length,
-      newDiamondsAdded: bulkResult.upsertedCount,
-      diamondsUpdated: bulkResult.modifiedCount,
-      diamondsRemoved: removedCount,
+      ...syncResult,
     };
   } catch (error) {
     return {
@@ -334,8 +287,53 @@ const syncInventoryFromApi = async (rawApiUrl, userMapping, userIdToAssign) => {
   }
 };
 
+const syncInventoryFromFtp = async (ftpCreds, userMapping, userIdToAssign) => {
+  const client = new ftp.Client();
+  try {
+    await client.access({
+      host: ftpCreds.host,
+      user: ftpCreds.user,
+      password: ftpCreds.password,
+      secure: false,
+    });
+    const writable = new Writable({
+      write(chunk, _, callback) {
+        chunks.push(chunk);
+        callback();
+      },
+    });
+    const chunks = [];
+    await client.downloadTo(writable, ftpCreds.path);
+    const buffer = Buffer.concat(chunks);
+    const readableStream = Readable.from(buffer);
+    const diamondsToProcess = await processCsvStreamWithMapping(
+      readableStream,
+      userMapping
+    );
+    const syncResult = await performDatabaseSync(
+      diamondsToProcess,
+      userIdToAssign
+    );
+    return {
+      success: true,
+      message: "FTP sync completed successfully.",
+      ...syncResult,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error.message || "An unexpected FTP error occurred.",
+    };
+  } finally {
+    if (!client.closed) {
+      client.close();
+    }
+  }
+};
+
 module.exports = {
   syncInventoryFromApi,
+  syncInventoryFromFtp,
   processCsvStreamWithMapping,
   processJsonData,
   convertGoogleSheetsUrl,
