@@ -39,11 +39,9 @@ exports.optionalProtect = async (req, res, next) => {
       // User load karo
       req.user = await User.findById(decoded.id).select("-password");
     } catch (error) {
-      // Error mat do! Bas console log karo aur aage badho
       console.log("Token invalid in optional auth, treating as guest");
     }
   }
-  // Chahe token ho ya na ho, aage badho
   next();
 };
 exports.isAdmin = (req, res, next) => {
