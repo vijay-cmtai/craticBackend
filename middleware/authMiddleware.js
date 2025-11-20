@@ -46,7 +46,6 @@ exports.optionalProtect = async (req, res, next) => {
   // Chahe token ho ya na ho, aage badho
   next();
 };
-
 exports.isAdmin = (req, res, next) => {
   if (req.user && req.user.role === "Admin") {
     next();
