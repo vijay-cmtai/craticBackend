@@ -11,11 +11,13 @@ const {
   processCsvStreamWithMapping,
   convertGoogleSheetsUrl,
 } = require("../services/inventoryService.js");
+
 const getUserId = (req, sellerId) => {
   if (req.user && req.user.role === "Admin" && sellerId) return sellerId;
   if (req.user && req.user._id) return req.user._id;
   return null;
 };
+
 const getHeaders = (buffer) => {
   return new Promise((resolve, reject) => {
     if (!buffer || buffer.length === 0)
@@ -31,6 +33,7 @@ const getHeaders = (buffer) => {
       .on("data", () => {});
   });
 };
+
 const createBulkOperations = (results, userIdToAssign) => {
   if (!Array.isArray(results) || results.length === 0) return [];
   const AVAILABLE_STATUSES = ["AVAILABLE", "GA"];
@@ -139,20 +142,23 @@ const uploadFromCsv = asyncHandler(async (req, res) => {
     const stockIdsToRemove = [...existingDbStockIds].filter(
       (id) => !newFileStockIds.has(id)
     );
-    let removedCount = 0;
+    let archivedCount = 0;
     if (stockIdsToRemove.length > 0) {
-      const { deletedCount } = await Diamond.deleteMany({
-        user: userIdToAssign,
-        stockId: { $in: stockIdsToRemove },
-      });
-      removedCount = deletedCount;
+      const { modifiedCount } = await Diamond.updateMany(
+        {
+          user: userIdToAssign,
+          stockId: { $in: stockIdsToRemove },
+        },
+        { $set: { availability: "ARCHIVED" } }
+      );
+      archivedCount = modifiedCount;
     }
 
     const responsePayload = {
       message: "Inventory synced via CSV Upload!",
       newDiamondsAdded: bulkResult.upsertedCount,
       diamondsUpdated: bulkResult.modifiedCount,
-      diamondsRemoved: removedCount,
+      diamondsArchived: archivedCount,
     };
 
     if (req.app.get("socketio"))
@@ -335,7 +341,7 @@ const previewFtpHeaders = asyncHandler(async (req, res) => {
 const getDiamonds = asyncHandler(async (req, res) => {
   const pageSize = 10;
   const page = Number(req.query.page) || 1;
-  
+
   const searchTerm = req.query.search
     ? {
         $or: [
@@ -345,16 +351,21 @@ const getDiamonds = asyncHandler(async (req, res) => {
       }
     : {};
 
-  const filter = { ...searchTerm };
+  const filter = {
+    ...searchTerm,
+    availability: { $ne: "ARCHIVED" },
+  };
 
   if (req.user) {
     if (req.user.role === "Admin") {
-      if (req.query.sellerId && req.query.sellerId !== "undefined" && req.query.sellerId !== "null") {
+      if (
+        req.query.sellerId &&
+        req.query.sellerId !== "undefined" &&
+        req.query.sellerId !== "null"
+      ) {
         filter.user = req.query.sellerId;
       }
-      
-    } 
-    else if (req.user.role === "Supplier") {
+    } else if (req.user.role === "Supplier") {
       filter.user = req.user._id;
     }
   }
@@ -367,6 +378,7 @@ const getDiamonds = asyncHandler(async (req, res) => {
 
   res.json({ diamonds, page, pages: Math.ceil(count / pageSize), count });
 });
+
 const getDiamondById = asyncHandler(async (req, res) => {
   const diamond = await Diamond.findById(req.params.id);
   if (!diamond) return res.status(404).json({ message: "Diamond not found" });
