@@ -6,7 +6,7 @@ const diamondSchema = new mongoose.Schema(
     stockId: { type: String, required: true },
     availability: {
       type: String,
-      enum: ["AVAILABLE", "SOLD", "PENDING"],
+      enum: ["AVAILABLE", "SOLD", "PENDING", "ARCHIVED"],
       default: "AVAILABLE",
       required: true,
     },
