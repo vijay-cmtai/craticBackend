@@ -4,6 +4,34 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/userModel");
 
 exports.protect = async (req, res, next) => {
+  // ... (Aapka purana code waisa hi rahega) ...
+  let token;
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer")
+  ) {
+    try {
+      token = req.headers.authorization.split(" ")[1];
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = await User.findById(decoded.id).select("-password");
+      if (!req.user) {
+        return res
+          .status(401)
+          .json({ message: "Not authorized, user not found" });
+      }
+      next();
+    } catch (error) {
+      console.error(error);
+      return res.status(401).json({ message: "Not authorized, token failed" });
+    }
+  }
+  if (!token) {
+    return res.status(401).json({ message: "Not authorized, no token" });
+  }
+};
+
+// ✅ YE NAYA FUNCTION ADD KAREIN (Isse Public aur Admin dono chalenge)
+exports.optionalProtect = async (req, res, next) => {
   let token;
 
   if (
@@ -11,35 +39,19 @@ exports.protect = async (req, res, next) => {
     req.headers.authorization.startsWith("Bearer")
   ) {
     try {
-      // Get token from header (Bearer token)
       token = req.headers.authorization.split(" ")[1];
-
-      // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-      // Get user from the token's ID and attach to request object
-      // Password ko select nahi karna hai
+      // User load karo
       req.user = await User.findById(decoded.id).select("-password");
-
-      if (!req.user) {
-        return res
-          .status(401)
-          .json({ message: "Not authorized, user not found" });
-      }
-
-      next();
     } catch (error) {
-      console.error(error);
-      return res.status(401).json({ message: "Not authorized, token failed" });
+      // Error mat do! Bas console log karo aur aage badho
+      console.log("Token invalid in optional auth, treating as guest");
     }
   }
-
-  if (!token) {
-    return res.status(401).json({ message: "Not authorized, no token" });
-  }
+  // Chahe token ho ya na ho, aage badho
+  next();
 };
 
-// Middleware to check if user is an Admin
 exports.isAdmin = (req, res, next) => {
   if (req.user && req.user.role === "Admin") {
     next();
