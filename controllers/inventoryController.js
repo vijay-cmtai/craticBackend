@@ -7,6 +7,7 @@ const ftp = require("basic-ftp");
 const csv = require("csv-parser");
 const {
   syncInventoryFromApi,
+  syncInventoryFromFtp,
   processCsvStreamWithMapping,
   convertGoogleSheetsUrl,
 } = require("../services/inventoryService.js");
@@ -153,7 +154,7 @@ const uploadFromCsv = asyncHandler(async (req, res) => {
     const responsePayload = {
       message: "Inventory synced via CSV Upload!",
       newDiamondsAdded: bulkResult.upsertedCount,
-      diamondsUpdated: bulkResult.modifiedCount - bulkResult.upsertedCount,
+      diamondsUpdated: bulkResult.modifiedCount,
       diamondsRemoved: removedCount,
     };
 
@@ -161,12 +162,6 @@ const uploadFromCsv = asyncHandler(async (req, res) => {
       req.app.get("socketio").emit("inventory-updated", responsePayload);
     res.status(200).json({ success: true, ...responsePayload });
   } catch (error) {
-    console.error("CSV Sync Error:", error);
-    if (error.code === 11000)
-      return res.status(409).json({
-        success: false,
-        message: `CSV Sync failed: Duplicate Stock ID found. ${error.message}`,
-      });
     res.status(500).json({
       success: false,
       message: `CSV processing failed: ${error.message}`,
@@ -191,13 +186,17 @@ const syncFromApi = asyncHandler(async (req, res) => {
         .json({ success: false, message: "User identification failed." });
     }
 
-    const result = await syncInventoryFromApi(apiUrl, mapping, userIdToAssign);
+    const result = await syncInventoryFromApi(
+      apiUrl,
+      JSON.parse(mapping),
+      userIdToAssign
+    );
 
     if (result.success) {
       const user = await User.findById(userIdToAssign);
       if (user) {
         user.apiSync.apiUrl = apiUrl;
-        user.apiSync.apiMapping = mapping;
+        user.apiSync.apiMapping = JSON.parse(mapping);
         user.apiSync.enabled = enableAutoSync === true;
         await user.save();
       }
@@ -212,7 +211,6 @@ const syncFromApi = asyncHandler(async (req, res) => {
 
     res.status(result.success ? 200 : 400).json(result);
   } catch (error) {
-    console.error("API Sync FATAL Error:", error);
     res.status(500).json({
       success: false,
       message: `API sync failed unexpectedly: ${error.message}`,
@@ -221,7 +219,8 @@ const syncFromApi = asyncHandler(async (req, res) => {
 });
 
 const syncFromFtp = asyncHandler(async (req, res) => {
-  const { host, user, password, path, mapping, sellerId } = req.body;
+  const { host, user, password, path, mapping, sellerId, enableAutoSync } =
+    req.body;
   const userIdToAssign = getUserId(req, sellerId);
   if (!userIdToAssign)
     return res
@@ -233,64 +232,36 @@ const syncFromFtp = asyncHandler(async (req, res) => {
       message: "Host, Path and Mapping are required.",
     });
 
-  const client = new ftp.Client();
   try {
-    const existingDbStockIds = new Set(
-      (
-        await Diamond.find(
-          { user: userIdToAssign, availability: { $ne: "SOLD" } },
-          "stockId"
-        ).lean()
-      ).map((d) => d.stockId)
+    const ftpCreds = { host, user, password, path };
+    const userMapping = JSON.parse(mapping);
+    const result = await syncInventoryFromFtp(
+      ftpCreds,
+      userMapping,
+      userIdToAssign
     );
 
-    await client.access({ host, user, password, secure: false });
-    const buffer = await downloadFtpToBuffer(client, path);
-
-    const readableStream = Readable.from(buffer);
-    const results = await processCsvStreamWithMapping(readableStream, mapping);
-    const newFileStockIds = new Set(results.map((d) => d.stockId));
-
-    const operations = createBulkOperations(results, userIdToAssign);
-    let bulkResult = { upsertedCount: 0, modifiedCount: 0 };
-    if (operations.length > 0) {
-      bulkResult = await Diamond.bulkWrite(operations, { ordered: false });
+    if (result.success) {
+      const supplier = await User.findById(userIdToAssign);
+      if (supplier) {
+        supplier.ftpSync.enabled = enableAutoSync === true;
+        supplier.ftpSync.host = host;
+        supplier.ftpSync.user = user;
+        supplier.ftpSync.password = password;
+        supplier.ftpSync.path = path;
+        supplier.ftpSync.ftpMapping = userMapping;
+        await supplier.save();
+      }
+      if (req.app.get("socketio"))
+        req.app.get("socketio").emit("inventory-updated", result);
     }
 
-    const stockIdsToRemove = [...existingDbStockIds].filter(
-      (id) => !newFileStockIds.has(id)
-    );
-    let removedCount = 0;
-    if (stockIdsToRemove.length > 0) {
-      const { deletedCount } = await Diamond.deleteMany({
-        user: userIdToAssign,
-        stockId: { $in: stockIdsToRemove },
-      });
-      removedCount = deletedCount;
-    }
-
-    const responsePayload = {
-      message: "Inventory synced via FTP!",
-      newDiamondsAdded: bulkResult.upsertedCount,
-      diamondsUpdated: bulkResult.modifiedCount - bulkResult.upsertedCount,
-      diamondsRemoved: removedCount,
-    };
-
-    if (req.app.get("socketio"))
-      req.app.get("socketio").emit("inventory-updated", responsePayload);
-    res.status(200).json({ success: true, ...responsePayload });
+    res.status(result.success ? 200 : 400).json(result);
   } catch (error) {
-    console.error("FTP Sync Error:", error);
-    if (error.code === 11000)
-      return res.status(409).json({
-        success: false,
-        message: `FTP Sync failed: Duplicate Stock ID found. ${error.message}`,
-      });
-    res
-      .status(500)
-      .json({ success: false, message: `FTP failed: ${error.message}` });
-  } finally {
-    if (!client.closed) client.close();
+    res.status(500).json({
+      success: false,
+      message: `FTP sync controller failed: ${error.message}`,
+    });
   }
 });
 
@@ -367,6 +338,7 @@ const previewFtpHeaders = asyncHandler(async (req, res) => {
 const getDiamonds = asyncHandler(async (req, res) => {
   const pageSize = 10;
   const page = Number(req.query.page) || 1;
+  
   const searchTerm = req.query.search
     ? {
         $or: [
@@ -379,23 +351,25 @@ const getDiamonds = asyncHandler(async (req, res) => {
   const filter = { ...searchTerm };
 
   if (req.user) {
-    if (req.user.role === "Admin" && req.query.sellerId) {
-      filter.user = req.query.sellerId;
-    } else if (req.user.role !== "Admin") {
+    if (req.user.role === "Admin") {
+      if (req.query.sellerId && req.query.sellerId !== "undefined" && req.query.sellerId !== "null") {
+        filter.user = req.query.sellerId;
+      }
+      
+    } 
+    else if (req.user.role === "Supplier") {
       filter.user = req.user._id;
     }
   }
-
   const count = await Diamond.countDocuments(filter);
   const diamonds = await Diamond.find(filter)
-    .populate("user", "name")
+    .populate("user", "name companyName")
     .limit(pageSize)
     .skip(pageSize * (page - 1))
     .sort({ createdAt: -1 });
 
   res.json({ diamonds, page, pages: Math.ceil(count / pageSize), count });
 });
-
 const getDiamondById = asyncHandler(async (req, res) => {
   const diamond = await Diamond.findById(req.params.id);
   if (!diamond) return res.status(404).json({ message: "Diamond not found" });
