@@ -2,9 +2,7 @@
 
 const jwt = require("jsonwebtoken");
 const User = require("../models/userModel");
-
 exports.protect = async (req, res, next) => {
-  // ... (Aapka purana code waisa hi rahega) ...
   let token;
   if (
     req.headers.authorization &&
@@ -29,8 +27,6 @@ exports.protect = async (req, res, next) => {
     return res.status(401).json({ message: "Not authorized, no token" });
   }
 };
-
-// ✅ YE NAYA FUNCTION ADD KAREIN (Isse Public aur Admin dono chalenge)
 exports.optionalProtect = async (req, res, next) => {
   let token;
 
