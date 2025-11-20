@@ -31,7 +31,6 @@ const getHeaders = (buffer) => {
       .on("data", () => {});
   });
 };
-
 const createBulkOperations = (results, userIdToAssign) => {
   if (!Array.isArray(results) || results.length === 0) return [];
   const AVAILABLE_STATUSES = ["AVAILABLE", "GA"];
