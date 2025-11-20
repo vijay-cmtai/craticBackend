@@ -27,7 +27,8 @@ const server = http.createServer(app);
 // ✅ Allow both local & production (Vercel frontend)
 const allowedOrigins = [
   "http://localhost:9002",             // Local frontend
-  "https://cratic-bay.vercel.app",     // Vercel frontend
+  "https://cratic-bay.vercel.app",
+  "https://cratic-nu.vercel.app"
 ];
 
 // ✅ CORS Configuration
